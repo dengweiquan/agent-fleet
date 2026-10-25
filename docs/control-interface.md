@@ -1,6 +1,6 @@
-# Future voice and chat control interface
+# Voice and chat control interface
 
-This document is a future contract and staged roadmap, not an implemented API or a release prerequisite. It does not expand the current deployment. AgentFleet remains an independent runtime: voice and chat provide a unified control surface, while the program owns scheduling, durable state, verification and acceptance.
+The independent control-protocol candidate implements a bounded local subset described in [local-control.md](local-control.md): scoped status/resource reads, durable draft/note commands and explicit pause/resume/stop handling. It is not installed into the fixed Muse trial release. The broader contract below remains a roadmap; client outbox, automatic instruction adoption, MCP, authenticated remote control and voice event delivery are not implemented. AgentFleet remains an independent runtime: voice and chat provide a unified control surface, while the program owns scheduling, durable state, verification and acceptance.
 
 The initial transport can reuse existing bounded CLI invocations and structured SSH requests. A verified MCP interface and event delivery can follow later. No new listener, message queue, key, token or authentication flow is introduced by this proposal. A generic remote-shell command is not part of the control API.
 
@@ -71,4 +71,4 @@ Push notifications and a Dot wake mechanism are unverified integration capabilit
 
 M1 verification should include lost receipts after a committed action, duplicate and conflicting requests, stale revisions, wrong-project targets, revoked permissions, interrupted cancellation, disconnected UI recovery and instruction acknowledgment before application. M2 adds capability discovery, event duplication/reordering, reconnect replay and unsupported wake behavior. These are future acceptance criteria, not completed test claims.
 
-Current release work proceeds without implementing this interface. The document establishes a small compatible direction: a unified human control surface over an independently running, evidence-driven AgentFleet core.
+The local candidate deliberately implements only the documented subset. The remaining contract establishes the direction for a unified human control surface over an independently running, evidence-driven AgentFleet core.

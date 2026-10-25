@@ -16,6 +16,7 @@ import {defaultPoolPath,poolCommand,fleetCommand} from './fleet-cli.ts';
 import {repository} from './git.ts';
 import {pooledRemoteCommand} from './pooled-remote-cli.ts';
 import {serveConnector} from './connector-server.ts';
+import {controlCommand} from './control-cli.ts';
 
 const args=process.argv.slice(2), json=args.includes('--json'), observer=args.includes('--observe');
 const remove=(name:string)=>{const i=args.indexOf(name);if(i<0)return undefined;const v=args[i+1];args.splice(i,2);return v;};
@@ -34,6 +35,7 @@ const help=`AgentFleet — private orchestration CLI (M1)
   sessions list --project PATH   Filter history by canonical project
   pool configure <json>         Register resources and shared capacity domains
   pool status | events [cursor] Inspect resource leases and shared audit cursor
+  control <scope.json> <action> Scoped local JSON control; submit then explicit apply
   fleet-remote offer/list/events/request  Reverse runner uses the same shared pool
   fleet schedule <fleet.json>   Dispatch explicit projects through shared pool
   fleet propose <fleet.json> <session> <text>  Lease configured manager for a proposal
@@ -68,6 +70,7 @@ function detach(command:string,params:string[]) {
 }
 async function command(words:string[]) {
   const [cmd,...rest]=words;
+  if(cmd==='control'){await controlCommand(rest,observer);return;}
   if(cmd==='fleet-remote'){if(rest[0]==='serve'){await serveConnector(rest.slice(1),{poolPath,observer});return;}out(await pooledRemoteCommand(rest,{poolPath,observer}));return;}
   if(cmd==='pool'){out(poolCommand(rest,poolPath,observer));return;}
   if(cmd==='fleet'||cmd==='_fleet'){
