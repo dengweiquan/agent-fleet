@@ -32,6 +32,8 @@ Local adapters support Claude Code, Codex and controlled fake processes. Real ca
 
 ## Primary reverse connector
 
+The current [delivery roadmap](docs/roadmap.md) prioritizes **Muse-native scheduled agent wake-up plus the existing queue loop**. Gadget is an optional isolated personal experiment, not a prerequisite or a promised real-time route. The next native scheduling check is a bounded enabled one-off; queued or disabled validation is not proof of execution. AgentFleet does not create or enable schedules automatically.
+
 The remote execution host initiates an SSH stdio JSON-lines connection to a fixed coordinator handler. `fleet-remote` offers, claims, ACKs and reports share the same SQLite transaction and capacity pool as local workers. Project/session/run/attempt/endpoint/resource/lease/fence identities are checked, reports are deduplicated, and late results cannot free an unknown lease. No application listener, new credential or public port is needed.
 
 The shipped [foreground connector](docs/client-start.md) currently maintains a **read-only primary observation channel** with bounded event waits, durable outbox/inbox and replay cursors. Its lifecycle library implements single-owner generations, explicit disable, bounded reconnect/backoff and a watchdog that requires verified hello/replay health. A five-minute native watchdog is a fallback lifecycle mechanism, not the main task scheduler.

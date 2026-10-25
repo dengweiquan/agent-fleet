@@ -19,7 +19,7 @@ This inventory separates implemented operations, synthetic validation and real e
 
 1. Keep the existing fixed observer trial and installation intact. Exercise local scoped reads, then explicitly authorized inert draft/note writes, through the existing task bridge.
 2. Finish a bounded, authorized real small development task with an available provider and independent review. Record the exact model, project, base commit, budget boundary and actual artifact evidence before calling it complete.
-3. For Gadget, first establish an explicitly approved Linux/BLE host, account exposure, token and phone pairing. Then test one nonce sidechat roundtrip; do not begin with a development task. Formal send idempotency, reply subscription access and cancellation remain separate verification points.
+3. Prioritize Muse-native wake-up: resolve any earlier queued validation through supported cancellation, then obtain a receipt for one bounded enabled one-off. Only after it passes, evaluate an explicitly bounded schedule and an authorized queue task. Gadget is a deferred personal experiment and does not block this path.
 4. Only after the execution environment and process ownership are known, approve a finite watchdog deployment and test disable, interruption and reconciliation. Do not add a permanent service or timer as a side effect of this source release.
 
 No additional provider shell, web frontend or message broker is needed to close these gaps. The immediate work is integration and evidence for the existing paths, not more empty adapters.

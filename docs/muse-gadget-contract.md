@@ -1,5 +1,7 @@
 # Conditional Muse Gadget message bridge — offline contract
 
+Product priority: deferred personal isolated experiment. The offline mapper is retained as tested evidence-processing code; live Gadget integration is not on the mainline. Continue native scheduled Muse wake-up and the queue loop without requiring Gadget hardware or pairing.
+
 Status: an original offline event mapper and evidence journal are implemented; the live bridge below remains a source-verified design. No SDK code has been installed or executed, no token created/read/copied, no device paired, and no message sent. This document corrects the earlier overbroad statement that Muse has no official programmatic message entry point. The current unpaired Muse VM's limitations do not establish that claim for other environments.
 
 ## Pinned official evidence
