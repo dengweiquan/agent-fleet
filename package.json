@@ -1,0 +1,21 @@
+{
+  "name": "agent-fleet",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "agent-fleet": "bin/agent-fleet"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "demo": "node --experimental-strip-types scripts/demo.ts",
+    "start": "node --experimental-strip-types src/cli.ts",
+    "example": "node --experimental-strip-types scripts/prepare-example.ts",
+    "demo:parallel": "node --experimental-strip-types scripts/demo-parallel.ts",
+    "demo:fleet": "node --experimental-strip-types scripts/demo-fleet.ts",
+    "typecheck": "node scripts/typecheck.mjs"
+  }
+}

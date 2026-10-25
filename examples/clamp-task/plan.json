@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "goal": "Implement a pure clamp utility in an isolated synthetic repository",
+  "tasks": [
+    {
+      "id": "clamp",
+      "title": "Implement and test clamp",
+      "prompt": "Create src/clamp.js exporting clamp(value,min,max). Clamp finite numeric values to inclusive finite bounds; throw RangeError for nonfinite inputs or min > max. Existing test/clamp.test.mjs is the independent acceptance contract. No dependencies, network, filesystem side effects, publishing, or deployment. Do not edit acceptance tests.",
+      "dependencies": [],
+      "capabilities": [
+        "code"
+      ],
+      "acceptance": [
+        [
+          "node",
+          "-e",
+          "const fs=require('node:fs'),c=require('node:crypto');if(c.createHash('sha256').update(fs.readFileSync('test/clamp.test.mjs')).digest('hex')!=='6c3e9cf7bfc2f912c66077545476f70467e10ab26f7a3126656b6261ce9f3e7d')throw Error('Acceptance contract changed')"
+        ],
+        [
+          "node",
+          "--test",
+          "test/clamp.test.mjs"
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+[
+  {
+    "name": "agent-deck",
+    "source": "https://github.com/asheshgoplani/agent-deck",
+    "commit": "19ac57547d0499c50e981d64ff1dfce923d33235",
+    "license": "MIT",
+    "licenseFiles": [
+      "LICENSE"
+    ],
+    "purpose": "Design and source reference only; no upstream code bundled or used as a runtime dependency."
+  },
+  {
+    "name": "cli-agent-orchestrator",
+    "source": "https://github.com/awslabs/cli-agent-orchestrator",
+    "commit": "bc1a6ec6136e949ef37442ffe182720db51a83da",
+    "license": "Apache-2.0",
+    "licenseFiles": [
+      "LICENSE",
+      "NOTICE"
+    ],
+    "purpose": "Design and source reference only; no upstream code bundled or used as a runtime dependency."
+  },
+  {
+    "name": "agent-orchestrator",
+    "source": "https://github.com/OrchestratorInc/agent-orchestrator",
+    "commit": "2782e4d7f6914457daa9696cd8bccd249ec5603e",
+    "license": "Apache-2.0",
+    "licenseFiles": [
+      "LICENSE"
+    ],
+    "purpose": "Design and source reference only; no upstream code bundled or used as a runtime dependency."
+  },
+  {
+    "name": "codex-orchestrator",
+    "source": "https://github.com/kingbootoshi/codex-orchestrator",
+    "commit": "035d5813a1d93c4d8385ee4d5ff09a9416f6a749",
+    "license": "MIT",
+    "licenseFiles": [
+      "LICENSE"
+    ],
+    "purpose": "Design and source reference only; no upstream code bundled or used as a runtime dependency."
+  }
+]

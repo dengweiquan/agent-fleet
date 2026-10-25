@@ -1,0 +1,16 @@
+import {mkdtempSync,cpSync,readFileSync,writeFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {fileURLToPath} from 'node:url';
+import {Engine} from '../src/engine.ts';
+import {git} from '../src/git.ts';
+const example=fileURLToPath(new URL('../examples/clamp-task/',import.meta.url));
+const dir=mkdtempSync(join(tmpdir(),'agent-fleet-clamp-')),root=join(dir,'project');
+cpSync(join(example,'seed'),root,{recursive:true});
+git(root,'init');git(root,'add','.');git(root,'-c','user.name=AgentFleet Fixture','-c','user.email=fixture@localhost','-c','commit.gpgsign=false','commit','-m','Fixed clamp acceptance contract');
+process.env.AGENT_FLEET_HOME=join(dir,'history');
+const engine=Engine.init(root,'Prepared clamp task — no live provider executed');
+const config=engine.config()!;config.endpoints!.push({id:'muse-example',kind:'external-agent',target:'pending-user-confirmed-SSH-path'});engine.config(config);
+engine.plan(JSON.parse(readFileSync(join(example,'plan.json'),'utf8')));
+const result={prepared:true,executed:false,modelsInvoked:false,project:root,history:process.env.AGENT_FLEET_HOME,sessionId:engine.sessionId,baseSha:engine.store.getMeta('baseSha'),taskId:'clamp',remoteEndpoint:'muse-example',requires:'User-confirmed existing SSH alias, actual Muse interface/capability and explicit model/spend authorization',resumeCommand:`AGENT_FLEET_HOME='${process.env.AGENT_FLEET_HOME}' agent-fleet resume ${engine.sessionId}`};
+writeFileSync(join(dir,'example.json'),JSON.stringify(result,null,2));engine.close();console.log(JSON.stringify(result,null,2));

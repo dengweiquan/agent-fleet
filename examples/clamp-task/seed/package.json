@@ -1,0 +1,1 @@
+{"name":"agent-fleet-clamp-fixture","private":true,"type":"module","scripts":{"test":"node --test test/clamp.test.mjs"}}

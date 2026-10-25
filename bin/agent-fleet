@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+SCRIPT="$0"
+while [ -L "$SCRIPT" ]; do
+  BASE=$(CDPATH= cd -- "$(dirname -- "$SCRIPT")" && pwd)
+  SCRIPT=$(readlink "$SCRIPT")
+  case "$SCRIPT" in /*) ;; *) SCRIPT="$BASE/$SCRIPT" ;; esac
+done
+ROOT=$(CDPATH= cd -- "$(dirname -- "$SCRIPT")/.." && pwd)
+NODE_BIN=$(command -v node || true)
+if [ -z "$NODE_BIN" ] && [ -x /opt/homebrew/bin/node ]; then NODE_BIN=/opt/homebrew/bin/node; fi
+if [ -z "$NODE_BIN" ]; then echo 'AgentFleet requires existing Node >=22.18' >&2; exit 1; fi
+exec "$NODE_BIN" --experimental-strip-types "$ROOT/src/cli.ts" "$@"

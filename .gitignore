@@ -1,0 +1,13 @@
+.agent-fleet/
+node_modules/
+*.log
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.bundle
+.env
+.env.*
+connector-config*.json
+references/upstream/
+.DS_Store
