@@ -22,6 +22,8 @@ try{
   writeFileSync(fleetPath,JSON.stringify({version:1,projects:[{root:project,sessionId:engine.sessionId,remoteClaimsAuthorized:false}]}));
   const offer:any=await pooledRemoteCommand(['offer',fleetPath,engine.sessionId,'observe-only','offline-endpoint','synthetic-repository'],{poolPath,observer:false});
   const binding:GadgetBinding={projectId:project,sessionId:engine.sessionId,taskId:offer.taskId,runId:offer.runId,attemptId:offer.attemptId,endpointId:offer.endpointId,requestId:randomUUID(),sidechatId:randomUUID()};
+  recordGadgetEvidence(engine,binding,{sourceId:'fixture-send-intent',kind:'send-intent',data:{reason:'Offline fixture only; no send authorized'}});
+  recordGadgetEvidence(engine,binding,{sourceId:'fixture-send-start',kind:'send-started',data:{reason:'Simulated send boundary; no transport exists'}});
   const ack={sourceId:'fixture-ack',kind:'ack' as const,data:{result:{session_id:binding.sidechatId,is_thread:true,message_id:'user-fixture'}}};
   recordGadgetEvidence(engine,binding,ack);
   recordGadgetEvidence(engine,binding,{sourceId:'fixture-reply',kind:'event',data:{type:'event',event:'message.assistant',payload:{session_id:binding.sidechatId,message_id:'reply-fixture',reply_to_message_id:'user-fixture',role:'assistant',display_text:'Synthetic nonce echoed.',display_text_ready:true}}});

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGadgetState,reduceGadget,GADGET_LIMITS} from '../src/gadget-events.ts';
+import {createGadgetState,reduceGadget,GADGET_LIMITS,GADGET_CAPABILITIES} from '../src/gadget-events.ts';
 import type {GadgetBinding,GadgetInput,GadgetState} from '../src/gadget-events.ts';
 
 const binding:GadgetBinding={projectId:'/synthetic/project with spaces',sessionId:'orchestration-synthetic',taskId:'task-synthetic',runId:'run-synthetic',attemptId:'attempt-synthetic',endpointId:'endpoint-synthetic',requestId:'request-synthetic',sidechatId:'sidechat-synthetic'};
@@ -158,4 +158,66 @@ test('assistant display_text_ready false allows later text; absent readiness fol
  const absent=reply('no-readiness');delete (absent.data as any).payload.display_text_ready;
  assert.equal(reduceGadget(delivered(),absent).state.messages[0].final,true);
  s=reduceGadget(s,reply('late-readiness',{text:'initial more',display_text_ready:false})).state;assert.equal(s.messages[0].final,true);assert.equal(s.messages[0].displayTextReady,true);
+});
+
+
+const sendIntent=(sourceId='intent-synthetic'):GadgetInput=>({sourceId,kind:'send-intent',data:{reason:'synthetic preparation only'}});
+const sendStarted=(sourceId='started-synthetic'):GadgetInput=>({sourceId,kind:'send-started',data:{reason:'synthetic started observation only'}});
+
+test('send intent and started are offline binding facts, without sender, cancellation or provider idempotency guarantees',()=>{
+ const initial=createGadgetState(binding);assert.equal(initial.sendPhase,'unrecorded');
+ const intent=reduceGadget(initial,sendIntent());assert.equal(intent.state.sendPhase,'prepared');assert.equal(initial.sendPhase,'unrecorded');
+ assert.equal(intent.events[0].kind,'gadget.send.intent');assert.deepEqual(intent.events[0].data.binding,binding);
+ const started=reduceGadget(intent.state,sendStarted());assert.equal(started.state.sendPhase,'started');assert.equal(started.events[0].kind,'gadget.send.started');
+ for(const e of [...intent.events,...started.events]){assert.equal(e.data.offlineOnly,true);assert.equal(e.data.sendAuthorized,false);assert.equal(e.data.actualSendVerified,false);assert.equal(e.data.providerIdempotency,'unverified');assert.equal(e.data.automaticResend,false);assert.equal(e.data.cancellationUnsupported,true);}
+ assert.equal(GADGET_CAPABILITIES.sendImplemented,false);assert.equal(GADGET_CAPABILITIES.cancellationUnsupported,true);assert.equal(GADGET_CAPABILITIES.sendIdempotency,'unverified');assert.equal(GADGET_CAPABILITIES.serviceUse,'personal-experimental');assert.equal(GADGET_CAPABILITIES.commercialUseAuthorized,false);assert.equal(GADGET_CAPABILITIES.tokenTermsUrl,'https://gadgets.muse.ai/sdk-terms');assert(Object.isFrozen(GADGET_CAPABILITIES));checkSafety(started.state);
+});
+
+test('prepared then disconnected is sticky unknown and late ACK cannot make it safe to resend',()=>{
+ let s=reduceGadget(createGadgetState(binding),sendIntent()).state;assert.equal(s.sendPhase,'prepared');
+ s=reduceGadget(s,{sourceId:'lost-before-start',kind:'disconnect',data:{reason:'interrupt before send-start observation'}}).state;
+ assert.equal(s.delivery,'unknown');assert.equal(s.sendPhase,'unknown');
+ s=reduceGadget(s,ack()).state;assert.equal(s.ack?.messageId,'user-synthetic');assert.equal(s.sendPhase,'unknown');assert.equal(s.delivery,'unknown');
+ assert.throws(()=>reduceGadget(s,sendIntent('another-intent')),/reopened|resend/);assert.throws(()=>reduceGadget(s,sendStarted('another-start')),/reopened|resend/);checkSafety(s);
+});
+
+test('started then disconnected stays unknown through late ACK, completed status and quiet',()=>{
+ let s=reduceGadget(reduceGadget(createGadgetState(binding),sendIntent()).state,sendStarted()).state;
+ s=reduceGadget(s,{sourceId:'lost-during-send',kind:'disconnect',data:{}}).state;assert.equal(s.sendPhase,'unknown');
+ s=reduceGadget(s,ack()).state;s=reduceGadget(s,task('completed-after-loss','completed')).state;
+ s=reduceGadget(s,{sourceId:'quiet-after-send-loss',kind:'quiet',data:{}}).state;
+ assert.equal(s.sendPhase,'unknown');assert.equal(s.delivery,'unknown');assert.equal(s.tasks[0].status,'completed');assert.throws(()=>reduceGadget(s,sendStarted('retry-start')),/reopened|resend/);checkSafety(s);
+});
+
+test('start requires intent; new ingress identity cannot start again while exact duplicate stays local idempotence only',()=>{
+ const initial=createGadgetState(binding);assert.throws(()=>reduceGadget(initial,sendStarted()),/requires a prepared intent/);assert.equal(initial.seen.length,0);
+ let s=reduceGadget(initial,sendIntent()).state;assert.equal(reduceGadget(s,sendIntent()).events.length,0);
+ assert.throws(()=>reduceGadget(s,sendIntent('duplicate-intent-new-source')),/already recorded/);
+ s=reduceGadget(s,sendStarted()).state;const saved=structuredClone(s);assert.equal(reduceGadget(s,sendStarted()).events.length,0);
+ assert.throws(()=>reduceGadget(s,sendStarted('second-start-new-source')),/cannot repeat/);assert.throws(()=>reduceGadget(s,sendIntent('new-intent-after-start')),/already recorded/);assert.deepEqual(s,saved);checkSafety(s);
+});
+
+test('ACK may acknowledge an uninterrupted prepared or started record but cannot reopen that attempt',()=>{
+ for(const start of [false,true]){
+  let s=reduceGadget(createGadgetState(binding),sendIntent()).state;if(start)s=reduceGadget(s,sendStarted()).state;
+  const out=reduceGadget(s,ack());s=out.state;assert.equal(s.sendPhase,'acknowledged');assert.equal(s.delivery,'delivered');assert.equal(out.events[0].data.observationalOnly,true);assert.equal(out.events[0].data.actualSendVerified,false);
+  assert.throws(()=>reduceGadget(s,sendIntent('intent-after-ack')),/reopened/);assert.throws(()=>reduceGadget(s,sendStarted('start-after-ack')),/reopened/);checkSafety(s);
+ }
+});
+
+test('ACK-only and old version-one snapshots never infer an actual send or proof that nothing was sent',()=>{
+ const observation=reduceGadget(createGadgetState(binding),ack());assert.equal(observation.state.sendPhase,'unrecorded');assert.equal(observation.events[0].data.actualSendVerified,false);
+ const legacy=createGadgetState(binding);delete legacy.sendPhase;const before=structuredClone(legacy);
+ const read=reduceGadget(legacy,{sourceId:'legacy-quiet',kind:'quiet',data:{}});assert.equal(read.state.sendPhase,'unrecorded');assert.equal(read.state.delivery,'awaiting-ack');assert.deepEqual(legacy,before);
+ assert.throws(()=>reduceGadget(read.state,sendStarted()),/prepared intent/);
+ const lost=reduceGadget(legacy,{sourceId:'legacy-loss',kind:'disconnect',data:{}}).state;assert.equal(lost.sendPhase,'unknown');assert.throws(()=>reduceGadget(lost,sendIntent()),/reopened/);
+ const oldUnknown={...legacy,delivery:'unknown' as const};const late=reduceGadget(oldUnknown,ack()).state;assert.equal(late.sendPhase,'unknown');assert.equal(late.delivery,'unknown');checkSafety(late);
+});
+
+test('send phase inputs reject argv, credentials and malformed state instead of adding a hidden execution channel',()=>{
+ const s=createGadgetState(binding);
+ assert.throws(()=>reduceGadget(s,{...sendIntent(),data:{argv:['synthetic-command']}}),/fields/);
+ assert.throws(()=>reduceGadget(s,{...sendStarted(),data:{token:'synthetic-not-a-token'}}),/fields/);
+ assert.throws(()=>reduceGadget({...s,sendPhase:'send-again' as any},sendIntent()),/invalid send phase/);
+ assert.throws(()=>reduceGadget(s,{sourceId:'cancel',kind:'cancel' as any,data:{}}),/kind/);assert.equal(s.seen.length,0);
 });

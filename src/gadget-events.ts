@@ -5,7 +5,9 @@ export interface GadgetBinding {
   projectId:string; sessionId:string; taskId:string; runId:string; attemptId:string;
   endpointId:string; requestId:string; sidechatId:string;
 }
-export interface GadgetInput {sourceId:string; kind:'ack'|'event'|'disconnect'|'quiet'; data:unknown}
+export interface GadgetInput {sourceId:string; kind:'ack'|'event'|'disconnect'|'quiet'|'send-intent'|'send-started'; data:unknown}
+export type GadgetSendPhase='unrecorded'|'prepared'|'started'|'acknowledged'|'unknown';
+export const GADGET_CAPABILITIES=Object.freeze({transport:'disabled-unpaired',sendImplemented:false,sendIdempotency:'unverified',automaticResend:false,cancellationUnsupported:true,serviceUse:'personal-experimental',commercialUseAuthorized:false,tokenTermsUrl:'https://gadgets.muse.ai/sdk-terms'} as const);
 export interface GadgetEvidenceEvent {kind:string; data:Record<string,unknown>}
 export const GADGET_LIMITS=Object.freeze({inputBytes:32768,seen:256,pending:12,messages:128,tasks:64,textBytes:16384,totalTextBytes:65536,quarantine:32});
 type WireKind='agent.status'|'task.status'|'delta.message_start'|'delta.text_append'|'delta.message_done'|'message.assistant';
@@ -25,6 +27,8 @@ export interface GadgetTask {
 export interface GadgetState {
   version:1; binding:GadgetBinding; transport:'disabled-unpaired'; accepted:false;
   delivery:'awaiting-ack'|'delivered'|'unknown';
+  /** Missing in older v1 snapshots means unrecorded, never proof that nothing was sent. */
+  sendPhase?:GadgetSendPhase;
   ack:{messageId:string; replyToMessageId:string|null}|null;
   seen:Array<{sourceId:string; hash:string}>;
   pending:Array<{sourceId:string; event:WireEvent}>;
@@ -99,20 +103,22 @@ function wire(value:unknown):WireEvent {
 export function createGadgetState(value:GadgetBinding):GadgetState {
   const input=object(JSON.parse(canonical(value)),bindingFields,'binding');
   const binding=Object.fromEntries(bindingFields.map(k=>[k,identifier(input[k],k,k==='projectId'?1024:256)])) as unknown as GadgetBinding;
-  return {version:1,binding,transport:'disabled-unpaired',accepted:false,delivery:'awaiting-ack',ack:null,seen:[],pending:[],messages:[],tasks:[],quarantine:[],unknownReasons:[]};
+  return {version:1,binding,transport:'disabled-unpaired',accepted:false,delivery:'awaiting-ack',sendPhase:'unrecorded',ack:null,seen:[],pending:[],messages:[],tasks:[],quarantine:[],unknownReasons:[]};
 }
 export function reduceGadget(previous:GadgetState,input:GadgetInput):{state:GadgetState;events:GadgetEvidenceEvent[]} {
   if(previous.version!==1||previous.transport!=='disabled-unpaired'||previous.accepted!==false)throw new Error('gadget: invalid snapshot authority');
   createGadgetState(previous.binding);
+  if(previous.sendPhase!==undefined&&!['unrecorded','prepared','started','acknowledged','unknown'].includes(previous.sendPhase))throw new Error('gadget: invalid send phase');
   const encoded=canonical(input),v=object(JSON.parse(encoded),['sourceId','kind','data'],'input');
   const sourceId=identifier(v.sourceId,'source ID');
-  if(!['ack','event','disconnect','quiet'].includes(v.kind as string)||!Object.hasOwn(v,'data'))throw new Error('gadget: invalid input kind/data');
+  if(!['ack','event','disconnect','quiet','send-intent','send-started'].includes(v.kind as string)||!Object.hasOwn(v,'data'))throw new Error('gadget: invalid input kind/data');
   const hash=createHash('sha256').update(encoded).digest('hex'),seen=previous.seen.find(s=>s.sourceId===sourceId);
   if(seen){if(seen.hash!==hash)throw new Error('gadget: conflicting source ID');return {state:previous,events:[]};}
   if(previous.seen.length>=GADGET_LIMITS.seen)throw new Error('gadget: source identity capacity exhausted; reconcile without replay');
   const state=structuredClone(previous),events:GadgetEvidenceEvent[]=[];
+  state.sendPhase=state.delivery==='unknown'?'unknown':state.sendPhase??'unrecorded';
   const emit=(kind:string,data:Record<string,unknown>)=>events.push({kind,data:{...data,accepted:false}});
-  const unknown=(id:string,reason:string)=>{state.delivery='unknown';if(!state.unknownReasons.includes(reason)&&state.unknownReasons.length<16)state.unknownReasons.push(reason);emit('gadget.unknown',{sourceId:id,reason,automaticResend:false});};
+  const unknown=(id:string,reason:string)=>{state.delivery='unknown';state.sendPhase='unknown';if(!state.unknownReasons.includes(reason)&&state.unknownReasons.length<16)state.unknownReasons.push(reason);emit('gadget.unknown',{sourceId:id,reason,automaticResend:false});};
   const quarantine=(id:string,reason:string)=>{state.quarantine.push({sourceId:id,reason});if(state.quarantine.length>GADGET_LIMITS.quarantine)state.quarantine.shift();emit('gadget.quarantine',{sourceId:id,reason});};
   state.seen.push({sourceId,hash});
   const defer=(id:string,e:WireEvent,reason:string)=>{
@@ -180,15 +186,33 @@ export function reduceGadget(previous:GadgetState,input:GadgetInput):{state:Gadg
     const replyToMessageId=alias([ack.reply_to_message_id],'ACK parent');
     if(ack.is_thread!==true||sessionId!==state.binding.sidechatId)quarantine(sourceId,'ACK is not the fixed sidechat');
     else if(state.ack&&(state.ack.messageId!==messageId||state.ack.replyToMessageId!==replyToMessageId)){quarantine(sourceId,'conflicting ACK');unknown(sourceId,'conflicting ACK');}
-    else if(!state.ack){state.ack={messageId,replyToMessageId};if(state.delivery!=='unknown')state.delivery='delivered';emit('gadget.ack',{sourceId,providerSessionId:sessionId,providerMessageId:messageId,isThread:true,delivery:state.delivery});revisit();}
+    else if(!state.ack){
+      state.ack={messageId,replyToMessageId};
+      if(state.delivery!=='unknown'&&state.sendPhase!=='unknown'){
+        state.delivery='delivered';
+        if(state.sendPhase==='prepared'||state.sendPhase==='started')state.sendPhase='acknowledged';
+      }
+      emit('gadget.ack',{sourceId,providerSessionId:sessionId,providerMessageId:messageId,isThread:true,delivery:state.delivery,sendPhase:state.sendPhase,observationalOnly:true,actualSendVerified:false});revisit();
+    }
   }else if(v.kind==='event'){
     const e=wire(v.data);
     if(!apply(sourceId,e))defer(sourceId,e,state.ack?'unresolved lineage':'awaiting ACK');
     revisit();
   }else{
     const info=object(v.data,['reason'],v.kind as string);if(info.reason!==undefined)text(info.reason,'reason');
-    if(v.kind==='disconnect'){unknown(sourceId,'disconnected');emit('gadget.disconnected',{sourceId,delivery:'unknown',automaticResend:false});}
-    else emit('gadget.quiet',{sourceId,quiescent:true,delivery:state.delivery});
+    if(v.kind==='send-intent'||v.kind==='send-started'){
+      // These are durable local facts only. Neither transition invokes or authorizes a sender.
+      if(state.delivery!=='awaiting-ack'||state.ack||state.sendPhase==='unknown')throw new Error('gadget: send outcome cannot be reopened; reconcile without resend');
+      if(v.kind==='send-intent'){
+        if(state.sendPhase!=='unrecorded')throw new Error('gadget: send intent already recorded; new ingress ID cannot reopen it');
+        state.sendPhase='prepared';
+      }else{
+        if(state.sendPhase!=='prepared')throw new Error('gadget: send-started requires a prepared intent and cannot repeat');
+        state.sendPhase='started';
+      }
+      emit(v.kind==='send-intent'?'gadget.send.intent':'gadget.send.started',{sourceId,binding:{...state.binding},sendPhase:state.sendPhase,offlineOnly:true,sendAuthorized:false,actualSendVerified:false,providerIdempotency:'unverified',automaticResend:false,cancellationUnsupported:true});
+    }else if(v.kind==='disconnect'){unknown(sourceId,'disconnected');emit('gadget.disconnected',{sourceId,delivery:'unknown',sendPhase:state.sendPhase,automaticResend:false});}
+    else emit('gadget.quiet',{sourceId,quiescent:true,delivery:state.delivery,sendPhase:state.sendPhase});
   }
   return {state,events};
 }
