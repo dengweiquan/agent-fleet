@@ -16,6 +16,7 @@
     "example": "node --experimental-strip-types scripts/prepare-example.ts",
     "demo:parallel": "node --experimental-strip-types scripts/demo-parallel.ts",
     "demo:fleet": "node --experimental-strip-types scripts/demo-fleet.ts",
-    "typecheck": "node scripts/typecheck.mjs"
+    "typecheck": "node scripts/typecheck.mjs",
+    "demo:gadget": "node --experimental-strip-types scripts/demo-gadget.ts"
   }
 }

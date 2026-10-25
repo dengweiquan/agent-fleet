@@ -13,9 +13,12 @@ node --experimental-strip-types src/connector-client.ts selfcheck
 npm test
 npm run demo:parallel
 npm run demo:fleet
+npm run demo:gadget
 ```
 
 The demos create isolated synthetic Git repositories and fake provider processes. They do not call a model or contact a remote host. SQLite experimental warnings on stderr may be expected on supported Node versions.
+
+`demo:gadget` feeds original public-schema fixtures through the offline Gadget event mapper and saves evidence against an existing synthetic queue offer. Its transport is `disabled-unpaired`: no SDK is loaded and no message is sent. ACKs, replies and raw task statuses remain evidence only; they do not update queue execution or task acceptance. See the [operable MVP and remaining gaps](docs/mvp-status.md).
 
 From a Git project directory, run `/absolute/agent-fleet/bin/agent-fleet init`, then the CLI without arguments for interactive mode. Use `sessions list`, `resume`, `status`, `config`, `plan`, `propose` and `schedule`. Add `--observe --json` for machine-readable observation. Exiting the frontend does not cancel detached workers.
 

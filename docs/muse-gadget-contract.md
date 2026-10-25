@@ -1,6 +1,6 @@
 # Conditional Muse Gadget message bridge — offline contract
 
-Status: source-verified design only. No SDK code has been installed or executed, no token created/read/copied, no device paired, and no message sent. This document corrects the earlier overbroad statement that Muse has no official programmatic message entry point. The current unpaired Muse VM's limitations do not establish that claim for other environments.
+Status: an original offline event mapper and evidence journal are implemented; the live bridge below remains a source-verified design. No SDK code has been installed or executed, no token created/read/copied, no device paired, and no message sent. This document corrects the earlier overbroad statement that Muse has no official programmatic message entry point. The current unpaired Muse VM's limitations do not establish that claim for other environments.
 
 ## Pinned official evidence
 
@@ -26,7 +26,7 @@ The stock installer installs dependencies and a persistent service. The paired d
 
 Bind `{projectId, sessionId, taskId, runId, attemptId, endpointId, requestId, sidechatId, nonce}` in a durable local outbox before sending. Keep an immutable sidechat per attempt for the first experiment. Treat the SDK's chat session ID and acknowledged user-message ID as provider identifiers, distinct from AgentFleet run/session IDs. A reviewed bridge must expose the SDK acknowledgment and raw subscription events; the stock CLI's success text alone cannot supply a complete correlation contract.
 
-Subscribe before sending, buffer a bounded number of pre-ACK events, then require an ACK confirming the exact sidechat (`session_id`, `is_thread`) and user-message identity. Never reuse a main chat. Preserve raw relevant fields and correlation evidence in a bounded, redacted journal. An output adapter may map events into the following evidence records; this mapping is specified, not wired into the scheduler:
+Subscribe before sending, buffer a bounded number of pre-ACK events, then require an ACK confirming the exact sidechat (`session_id`, `is_thread`) and user-message identity. Never reuse a main chat. Preserve raw relevant fields and correlation evidence in a bounded, redacted journal. The offline mapper records the following evidence; it is not wired into scheduler completion or a live transport:
 
 | Input | AgentFleet evidence | Must not imply |
 | --- | --- | --- |
@@ -45,4 +45,12 @@ The SDK creates transport request IDs, but the inspected methods do not establis
 
 After the specific host/setup/message approval, the first live check sends exactly one bounded, non-business nonce prompt into a new dedicated sidechat and asks for the same nonce in its reply. No repository work, shell task, scheduled follow-up or file request is part of this test. Record SDK version, send attempt, ACK identifiers, bound reply, any raw task status and the timeout result. A nonce echo demonstrates message roundtrip only; task acceptance remains unavailable in this diagnostic.
 
-Offline adapter acceptance cases: ACK-only stays delivered; three seconds quiet never succeeds; failed/cancelled status is preserved; wrong sidechat and wrong parent are rejected; pre-ACK events remain pending; duplicate ACK cannot start a second attempt; lost ACK produces unknown; repeated identical text deltas are not blindly collapsed; reconnect does not resend; a completed task still requires the existing independent acceptance gate. No runtime adapter or live-device test is claimed by this document.
+Offline adapter acceptance cases: ACK-only stays delivered; three seconds quiet never succeeds; failed/cancelled status is preserved; wrong sidechat and wrong parent are rejected; pre-ACK events remain pending; duplicate ACK cannot start a second attempt; lost ACK produces unknown; repeated identical text deltas are not blindly collapsed; reconnect does not resend; a completed task still requires the existing independent acceptance gate. No live transport or live-device test is claimed by this document.
+
+## Offline integration boundary
+
+`src/gadget-events.ts` is a pure typed reducer over bounded JSON fixtures. It never opens a socket, starts a process or imports the SDK. `src/gadget-evidence.ts` validates the project/session/task/run/attempt/endpoint against an existing remote queue offer before writing reducer state and session audit events atomically. External attempts are represented with explicit binding data on session events, not forged local-run foreign keys. Querying evidence does not dispatch work.
+
+The evidence journal is separate from the queue's claim/ACK/result protocol: observing even a raw `completed` status neither releases a resource lease nor accepts a candidate. Stable bridge ingress IDs deduplicate exact replay; conflicting reuse is rejected. The store uses a revision compare-and-swap so concurrent updates cannot overwrite one another. After a stale write, reload evidence before retrying the same input. No automatic network send is part of this retry.
+
+Within one orchestration session, immutable attempt bindings and unique sidechats are enforced. A future deployed bridge must also reserve sidechat identity across sessions/projects; this offline session journal is not a global sidechat registry. Buffers, histories and the stored snapshot have finite capacity and fail closed rather than evict deduplication evidence. The program records an event as public observation, never as complete model reasoning or independent verification.

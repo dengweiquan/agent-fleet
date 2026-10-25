@@ -101,7 +101,32 @@ export class Store {
   }
   setMeta(key: string, value: unknown): void {
     if (['plan', 'config'].includes(key)) throw new Error('use validated setPlan/setConfig');
+    if(key==='gadget:evidence:v1')throw new Error('use gadget evidence compare-and-swap');
     this.saveMeta(key, value, 'meta.saved');
+  }
+  gadgetEvidenceSnapshot():{revision:number;records:Record<string,unknown>} {
+    const value=this.getMeta('gadget:evidence:v1');
+    if(value===null)return {revision:0,records:{}};
+    const snapshot=value as {revision:number;records:Record<string,unknown>};
+    if(!snapshot||!Number.isSafeInteger(snapshot.revision)||snapshot.revision<0||!snapshot.records||typeof snapshot.records!=='object'||Array.isArray(snapshot.records))throw new Error('Invalid gadget evidence snapshot');
+    return snapshot;
+  }
+  /** One restricted evidence namespace. No run state, queue ACK, lease, or acceptance writes. */
+  compareAndSwapGadgetEvidence(expectedRevision:number,records:Record<string,unknown>,events:Array<{kind:string;data:unknown}>):{revision:number;events:Event[]} {
+    if(this.readOnly)throw new Error('observer is read-only');
+    if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0||expectedRevision>=Number.MAX_SAFE_INTEGER)throw new Error('Invalid gadget evidence revision');
+    if(!records||typeof records!=='object'||Array.isArray(records)||Object.keys(records).length>256||Object.keys(records).some(key=>!/^[a-f0-9]{64}$/.test(key)))throw new Error('Invalid bounded gadget evidence records');
+    if(!Array.isArray(events)||events.length>32||events.some(event=>!event||!/^gadget\.[A-Za-z0-9_.:-]{1,92}$/.test(event.kind)||Buffer.byteLength(encode(event.data))>32768)||Buffer.byteLength(encode(events))>262144)throw new Error('Invalid bounded gadget audit events');
+    const revision=expectedRevision+1,encoded=encode({revision,records});
+    this.db.exec('BEGIN IMMEDIATE');let committed:Event[];
+    try{
+      if(this.gadgetEvidenceSnapshot().revision!==expectedRevision)throw new Error('Gadget evidence revision conflict');
+      this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('gadget:evidence:v1',encoded);
+      committed=events.map(event=>this.insertEvent(null,event.kind,event.data));
+      this.db.exec('COMMIT');
+    }catch(error){this.db.exec('ROLLBACK');throw error;}
+    for(const event of committed)for(const listener of this.listeners){try{listener(structuredClone(event));}catch{/* Evidence already committed. */}}
+    return {revision,events:committed};
   }
   getMeta(key: string): unknown | null {
     const row = this.db.prepare('SELECT value FROM meta WHERE key=?').get(key) as { value:string } | undefined;
